@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <!-- Feuille de styles principale (Dark mode moderne) -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Police Google Fonts Inter pour un rendu typographique soigné -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Bibliothèque Chart.js via CDN officiel pour graphiques interactifs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Barre de navigation supérieure -->
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-logo">🎓</div>
+                <div class="brand-text">
+                    <h1>AcademicTrack</h1>
+                    <span class="badge-student">L1 Informatique • Suivi & Planning</span>
+                </div>
+            </div>
+
+            <div class="topbar-actions">
+                <!-- Statut de santé de l'API mis à jour par JavaScript -->
+                <div id="health-indicator" class="health-badge connecting">
+                    <span class="status-dot"></span>
+                    <span id="health-text" class="status-label">Connexion API...</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="btn-import-ics" title="Importer automatiquement un planning iCalendar">
+                    📅 Importer mes cours (ICS)
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-reset-planning" title="Supprimer séances, tâches importées et modules sans note pour réimporter proprement">
+                    ♻️ Réinitialiser le planning
+                </button>
+                <a href="/docs" target="_blank" class="btn btn-secondary btn-sm" title="Consulter la documentation Swagger">
+                    <span>Swagger API</span> ↗
+                </a>
+            </div>
+        </header>
+
+        <!-- Contenu principal -->
+        <main class="main-content">
+            <!-- Grille des statistiques rapides (KPIs) -->
+            <section class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Moyenne Générale</span>
+                        <span class="kpi-icon">📊</span>
+                    </div>
+                    <div class="kpi-value" id="kpi-average">-- <span class="kpi-unit">/ 20</span></div>
+                    <div class="kpi-footer">
+                        <span id="kpi-average-desc" class="kpi-trend neutral">Pondérée par coefficients</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Unités d'Enseignement</span>
+                        <span class="kpi-icon">📚</span>
+                    </div>
+                    <div class="kpi-value" id="kpi-modules-count">0 <span class="kpi-unit">UE</span></div>
+                    <div class="kpi-footer">
+                        <span id="kpi-modules-desc">Modules enregistrés</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Tâches en Cours</span>
+                        <span class="kpi-icon">⏳</span>
+                    </div>
+                    <div class="kpi-value" id="kpi-tasks-pending">0</div>
+                    <div class="kpi-footer">
+                        <span id="kpi-tasks-urgent" class="kpi-trend warning">0 prioritaire</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Taux de Réussite</span>
+                        <span class="kpi-icon">🎯</span>
+                    </div>
+                    <div class="kpi-value" id="kpi-success-rate">-- <span class="kpi-unit">%</span></div>
+                    <div class="kpi-footer">
+                        <span id="kpi-success-desc">UE avec moyenne ≥ 10/20</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Calendrier Hebdomadaire des Cours (importés ICS) -->
+            <section class="panel-card" id="section-planning-hebdo" style="display:none;">
+                <div class="panel-header">
+                    <div>
+                        <h2>📅 Emploi du Temps de la Semaine</h2>
+                        <p class="panel-subtitle">Séances de cours importées depuis votre calendrier universitaire</p>
+                    </div>
+                    <div class="panel-actions">
+                        <button class="btn btn-secondary btn-sm" id="btn-week-prev" title="Semaine précédente">← Préc.</button>
+                        <span id="week-label" style="font-weight:600; padding: 0 8px;"></span>
+                        <button class="btn btn-secondary btn-sm" id="btn-week-next" title="Semaine suivante">Suiv. →</button>
+                        <button class="btn btn-secondary btn-sm" id="btn-week-today" title="Revenir à aujourd'hui">Aujourd'hui</button>
+                    </div>
+                </div>
+                <div class="panel-body" id="weekly-schedule-container" style="padding: 0.5rem 1rem 1rem;">
+                    <!-- Injection dynamique par JavaScript -->
+                </div>
+            </section>
+
+            <!-- Grille à deux colonnes : Modules/Notes et Tâches/Planning -->
+            <div class="dashboard-split">
+                <!-- Colonne Gauche : Modules & Notes -->
+                <section class="panel-card">
+                    <div class="panel-header">
+                        <div>
+                            <h2>Modules & Relevé de Notes</h2>
+                            <p class="panel-subtitle">Gestion des UE, coefficients et notes obtenues</p>
+                        </div>
+                        <div class="panel-actions">
+                            <button class="btn btn-secondary btn-sm" id="btn-open-grade-modal">
+                                + Ajouter Note
+                            </button>
+                            <button class="btn btn-primary btn-sm" id="btn-add-module">
+                                + Nouveau Module
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="panel-body panel-body-modules" id="modules-container">
+                        <!-- Injection dynamique des modules via JavaScript -->
+                    </div>
+                </section>
+
+                <!-- Colonne Droite : Planning & Tâches -->
+                <section class="panel-card">
+                    <div class="panel-header">
+                        <div>
+                            <h2>Planning & Échéances</h2>
+                            <p class="panel-subtitle">Devoirs, révisions et projets à rendre</p>
+                        </div>
+                        <div class="panel-actions">
+                            <button class="btn btn-secondary btn-sm" id="btn-clear-tasks" title="Vider ou réinitialiser les tâches du planning">
+                                🗑️ Vider
+                            </button>
+                            <button class="btn btn-primary btn-sm" id="btn-add-task">
+                                + Nouvelle Tâche
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="panel-body panel-body-tasks" id="tasks-container">
+                        <!-- Injection dynamique des tâches via JavaScript -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Grille Phase 3 : Graphiques Analytiques & Simulateur -->
+            <div class="dashboard-split analytics-split">
+                <!-- Section Chart.js -->
+                <section class="panel-card">
+                    <div class="panel-header">
+                        <div>
+                            <h2>Visualisation & Progression</h2>
+                            <p class="panel-subtitle">Graphique interactif des performances</p>
+                        </div>
+                        <div class="chart-toggles">
+                            <button class="btn btn-secondary btn-sm active" id="btn-chart-averages">Moyennes UE</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-chart-coefficients">Coefficients</button>
+                        </div>
+                    </div>
+                    <div class="panel-body chart-container-body">
+                        <div class="chart-wrapper">
+                            <canvas id="academic-chart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section Simulateur de Partiel -->
+                <section class="panel-card">
+                    <div class="panel-header">
+                        <div>
+                            <h2>Simulateur de Notes & Partiels</h2>
+                            <p class="panel-subtitle">Estimez l'impact d'une future note sur vos moyennes</p>
+                        </div>
+                        <span class="badge-simulator">Mode Prévisionnel 🔮</span>
+                    </div>
+                    <div class="panel-body simulator-body">
+                        <div class="simulator-form">
+                            <div class="form-group">
+                                <label for="sim-module-select">Matière cible *</label>
+                                <select id="sim-module-select">
+                                    <option value="">Sélectionnez un module...</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="sim-note">Note hypothétique (/20)</label>
+                                    <input type="number" id="sim-note" min="0" max="20" step="0.25" value="14.0">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sim-coef">Coefficient du partiel</label>
+                                    <input type="number" id="sim-coef" min="0.5" max="10" step="0.5" value="2.0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Résultats de la simulation -->
+                        <div class="simulator-results">
+                            <div class="sim-result-card">
+                                <span class="sim-label">Moyenne UE projetée</span>
+                                <div class="sim-value-row">
+                                    <span class="sim-val" id="sim-module-avg">-- / 20</span>
+                                    <span class="delta-badge neutral" id="sim-module-delta">--</span>
+                                </div>
+                                <span class="sim-subtext" id="sim-module-desc">Sélectionnez une matière pour simuler</span>
+                            </div>
+
+                            <div class="sim-result-card">
+                                <span class="sim-label">Moyenne Générale projetée</span>
+                                <div class="sim-value-row">
+                                    <span class="sim-val" id="sim-general-avg">-- / 20</span>
+                                    <span class="delta-badge neutral" id="sim-general-delta">--</span>
+                                </div>
+                                <span class="sim-subtext" id="sim-general-desc">Impact global sur le semestre</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Pied de page -->
+        <footer class="footer">
+            <div class="footer-left">
+                <span>Portfolio Étudiant L1 Informatique</span>
+                <span class="separator">•</span>
+                <span>FastAPI + SQLite + Vanilla JS + Chart.js</span>
+            </div>
+            <div class="footer-right">
+                <span id="footer-db-status" class="mono-text">DB: academic_dashboard.db</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- ==========================================
+         MODALE : AJOUT MODULE
+         ========================================== -->
+    <div class="modal-backdrop" id="modal-module" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Ajouter une Unité d'Enseignement (UE)</h3>
+                <button class="btn-close" data-close-modal="modal-module" title="Fermer">✕</button>
+            </div>
+            <form id="form-add-module">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="module-nom">Nom de la matière *</label>
+                        <input type="text" id="module-nom" placeholder="Ex: Algorithmique et Programmation" required autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="module-code">Code UE *</label>
+                            <input type="text" id="module-code" placeholder="Ex: INF101" required autocomplete="off" style="text-transform: uppercase;">
+                        </div>
+                        <div class="form-group">
+                            <label for="module-coef">Coefficient *</label>
+                            <input type="number" id="module-coef" min="0.5" max="20" step="0.5" value="3.0" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal="modal-module">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Enregistrer le module</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         MODALE : AJOUT NOTE
+         ========================================== -->
+    <div class="modal-backdrop" id="modal-grade" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Ajouter une Note</h3>
+                <button class="btn-close" data-close-modal="modal-grade" title="Fermer">✕</button>
+            </div>
+            <form id="form-add-grade">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="grade-module-id">Module / UE concernée *</label>
+                        <select id="grade-module-id" required>
+                            <option value="">Sélectionnez un module...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="grade-intitule">Intitulé de l'évaluation *</label>
+                        <input type="text" id="grade-intitule" placeholder="Ex: Partiel 1, CC2, TP Noté" required autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="grade-note">Note obtenue (/20) *</label>
+                            <input type="number" id="grade-note" min="0" max="20" step="0.25" placeholder="Ex: 14.5" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="grade-coef">Coefficient de la note *</label>
+                            <input type="number" id="grade-coef" min="0.1" max="10" step="0.1" value="1.0" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="grade-date">Date de l'épreuve (optionnelle)</label>
+                        <input type="date" id="grade-date">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal="modal-grade">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Enregistrer la note</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         MODALE : AJOUT TÂCHE / PLANNING
+         ========================================== -->
+    <div class="modal-backdrop" id="modal-task" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Nouvelle Tâche ou Échéance</h3>
+                <button class="btn-close" data-close-modal="modal-task" title="Fermer">✕</button>
+            </div>
+            <form id="form-add-task">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="task-titre">Intitulé de la tâche *</label>
+                        <input type="text" id="task-titre" placeholder="Ex: Rendre le projet de C, Réviser les Maths..." required autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="task-date">Date d'échéance (optionnelle)</label>
+                            <input type="date" id="task-date">
+                        </div>
+                        <div class="form-group">
+                            <label for="task-priorite">Priorité *</label>
+                            <select id="task-priorite" required>
+                                <option value="Haute">🔴 Haute (Urgent)</option>
+                                <option value="Moyenne" selected>🟡 Moyenne</option>
+                                <option value="Basse">🟢 Basse</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal="modal-task">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Ajouter la tâche</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         MODALE : MODIFIER TÂCHE (PHASE 3)
+         ========================================== -->
+    <div class="modal-backdrop" id="modal-edit-task" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Modifier la Tâche</h3>
+                <button class="btn-close" data-close-modal="modal-edit-task" title="Fermer">✕</button>
+            </div>
+            <form id="form-edit-task">
+                <input type="hidden" id="edit-task-id">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-task-titre">Intitulé de la tâche *</label>
+                        <input type="text" id="edit-task-titre" required autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit-task-date">Date d'échéance</label>
+                            <input type="date" id="edit-task-date">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-task-priorite">Priorité *</label>
+                            <select id="edit-task-priorite" required>
+                                <option value="Haute">🔴 Haute (Urgent)</option>
+                                <option value="Moyenne">🟡 Moyenne</option>
+                                <option value="Basse">🟢 Basse</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal="modal-edit-task">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Enregistrer les modifications</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="modal-import-ics" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Importer un Planning (ICS / iCal)</h3>
+                <button class="btn-close" data-close-modal="modal-import-ics" title="Fermer">✕</button>
+            </div>
+            <form id="form-import-ics">
+                <div class="modal-body">
+                    <p class="modal-intro">
+                        Importez vos matières et vos échéances automatiquement à partir de votre emploi du temps universitaire (ADE Campus, ENT, Moodle).
+                    </p>
+
+                    <div class="form-group">
+                        <label for="ics-group-input">🎓 Votre groupe (filtrage)</label>
+                        <input type="text" id="ics-group-input" placeholder="Ex: INFO2A, INFO 2AB, L1-INFO-A…" autocomplete="off">
+                        <small style="color: var(--text-muted, #9ca3af);">Laissez vide pour tout importer. Renseignez votre groupe pour ne garder que vos cours.</small>
+                    </div>
+
+                    <div class="form-divider"><span>Source du calendrier</span></div>
+
+                    <div class="form-group">
+                        <label for="ics-url-input">🔗 Lien URL du calendrier (iCal / Webcal)</label>
+                        <input type="text" id="ics-url-input" placeholder="Ex: https://edt.univ-paris.fr/ade/export.ics" autocomplete="off">
+                    </div>
+
+                    <div class="form-divider"><span>OU</span></div>
+
+                    <div class="form-group">
+                        <label for="ics-file-input">📁 Fichier .ics téléchargé</label>
+                        <input type="file" id="ics-file-input" accept=".ics,text/calendar">
+                    </div>
+
+                    <div class="import-help-box">
+                        <small>
+                            💡 <strong>Évaluations</strong> (examen, partiel, CC, rendu, projet) → ajoutées en priorité 🔴 dans vos tâches.<br>
+                            📅 <strong>Cours</strong> (CM, TD, TP) → ajoutés dans le calendrier hebdomadaire (pas dans les tâches).
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal="modal-import-ics">Annuler</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-import-ics">
+                        📥 Lancer l'importation
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- Conteneur de Notifications Toasts -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Script JavaScript principal -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
